@@ -199,6 +199,7 @@ Optional environment variables:
 - `CODEX_IMAGE_COMPRESSION`
 - `CODEX_IMAGE_OUTPUT_DIR`
 - `CODEX_IMAGE_TIMEOUT`
+- `CODEX_IMAGE_USER_AGENT`
 - `CODEX_IMAGE_MODEL_PROVIDER`
 
 Model behavior:
@@ -210,6 +211,8 @@ Model behavior:
 - Official `gpt-image-2` requests reject transparent background locally before
   the request is sent
 - In API key mode, `OPENAI_BASE_URL` or an equivalent provider `base_url` is required
+- `CODEX_IMAGE_USER_AGENT` can override the HTTP user agent for OpenAI-compatible
+  gateways that filter command-line clients; never put secrets in this value
 
 Dependency note:
 

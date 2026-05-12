@@ -372,6 +372,20 @@ class ResponsesTransportRegressionTests(unittest.TestCase):
             cli_text,
         )
 
+    def test_build_headers_sets_configurable_user_agent(self):
+        with mock.patch.dict(os.environ, {"CODEX_IMAGE_USER_AGENT": "custom-client/1.0"}, clear=False):
+            headers = codex_image.build_headers("key", "application/json")
+
+        self.assertEqual(headers["User-Agent"], "custom-client/1.0")
+        self.assertEqual(headers["Accept"], "application/json")
+        self.assertEqual(headers["Content-Type"], "application/json")
+
+    def test_build_headers_falls_back_when_user_agent_is_blank(self):
+        with mock.patch.dict(os.environ, {"CODEX_IMAGE_USER_AGENT": "   "}, clear=False):
+            headers = codex_image.build_headers("key", "application/json")
+
+        self.assertEqual(headers["User-Agent"], codex_image.DEFAULT_USER_AGENT)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -39,6 +39,7 @@ Base URL precedence:
 - `CODEX_IMAGE_COMPRESSION`
 - `CODEX_IMAGE_OUTPUT_DIR`
 - `CODEX_IMAGE_TIMEOUT`
+- `CODEX_IMAGE_USER_AGENT`
 
 ## Model mapping
 
@@ -61,3 +62,8 @@ Base URL precedence:
 - upstream does not implement `/v1/images/generations` or `/v1/images/edits`
 - upstream request failure or moderation rejection
 - server returning non-JSON payloads
+
+Some OpenAI-compatible gateways sit behind browser-signature filtering. The
+launcher sends a command-line style `User-Agent` by default, and
+`CODEX_IMAGE_USER_AGENT` can override it when an upstream requires a specific
+client signature. Do not put API keys or other secrets in this value.

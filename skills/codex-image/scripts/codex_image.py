@@ -36,6 +36,7 @@ DEFAULT_BACKGROUND = "auto"
 DEFAULT_MODERATION = "auto"
 DEFAULT_BATCH_CONCURRENCY = 4
 DEFAULT_BATCH_MAX_JOBS = 500
+DEFAULT_USER_AGENT = "curl/8.0"
 IMAGE_SIZE_STEP = 16
 IMAGE_MAX_EDGE = 3840
 IMAGE_MIN_PIXELS = 655_360
@@ -1334,10 +1335,14 @@ def build_api_url(base_url: str, endpoint: str) -> str:
 
 
 def build_headers(api_key: str, content_type: str) -> dict[str, str]:
+    user_agent = os.environ.get("CODEX_IMAGE_USER_AGENT", DEFAULT_USER_AGENT).strip()
+    if not user_agent:
+        user_agent = DEFAULT_USER_AGENT
     return {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": content_type,
         "Accept": "application/json",
+        "User-Agent": user_agent,
         "Idempotency-Key": str(uuid.uuid4()),
     }
 
