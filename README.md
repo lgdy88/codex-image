@@ -154,11 +154,27 @@ That document now also includes:
 
 ## Install
 
+### Install into Codex Desktop
+
+Use this fork when you want the request-header compatibility fix for some
+OpenAI-compatible image gateways:
+
+```powershell
+python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
+  --repo lgdy88/codex-image `
+  --path skills/codex-image
+```
+
+If `codex-image` is already installed, move or delete the existing
+`$env:USERPROFILE\.codex\skills\codex-image` directory first, then run the
+installer again. Restart Codex Desktop after installation so the new skill is
+loaded.
+
 ### Option 1: Official skill-installer with repo and path
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
-  --repo IanShaw027/codex-image \
+  --repo lgdy88/codex-image \
   --path skills/codex-image
 ```
 
@@ -166,20 +182,42 @@ python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/inst
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
-  --url https://github.com/IanShaw027/codex-image/tree/main/skills/codex-image
+  --url https://github.com/lgdy88/codex-image/tree/main/skills/codex-image
 ```
 
 ### Option 3: Manual install
 
 ```bash
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-git clone https://github.com/IanShaw027/codex-image.git /tmp/codex-image
+git clone https://github.com/lgdy88/codex-image.git /tmp/codex-image
 cp -R /tmp/codex-image/skills/codex-image "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
 Restart Codex after installation.
 
 ## Configuration
+
+### Configure a third-party image gateway
+
+`codex-image` uses the Images API as a tool call. It does not replace the main
+Codex coding/chat model.
+
+PowerShell user-level setup:
+
+```powershell
+[Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "https://api.example.com/v1", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "your-new-api-key", "User")
+[Environment]::SetEnvironmentVariable("CODEX_IMAGE_MODEL", "gpt-image-2", "User")
+```
+
+Optional gateway compatibility override:
+
+```powershell
+[Environment]::SetEnvironmentVariable("CODEX_IMAGE_USER_AGENT", "curl/8.0", "User")
+```
+
+Restart Codex Desktop after changing user-level environment variables. Keep API
+keys out of README files, prompts, screenshots, commits, and issue comments.
 
 Preferred runtime sources:
 
@@ -221,6 +259,33 @@ Dependency note:
 - when a related workflow needs Python deps such as the OpenAI SDK, install them into `${CODEX_HOME:-$HOME/.codex}/.venv`
 
 ## Usage
+
+### Ask Codex to use this skill
+
+After installation and configuration, ask Codex for a saved image workflow:
+
+```text
+Use codex-image to generate a 16:9 futuristic city image and save it to the current workspace.
+```
+
+Chinese example:
+
+```text
+用 codex-image 生成一张 16:9 的未来城市图，保存到当前工作区。
+```
+
+Codex should route that request to the local `codex-image` skill, call the
+configured OpenAI-compatible image endpoint, and return the saved file path.
+
+Manual Windows smoke test:
+
+```powershell
+& "$env:USERPROFILE\.codex\skills\codex-image\scripts\codex-image.cmd" generate `
+  --model gpt-image-2 `
+  --size 16:9 `
+  --out-dir .\generated-images `
+  "A cinematic futuristic city skyline at night, wide 16:9 composition, no readable text, no watermark"
+```
 
 Generate a 4K image directly:
 
