@@ -6,6 +6,8 @@
 
 它适合需要把图片保存到本地文件、指定输出路径、使用多张参考图、批量生成，或通过 API key 和自定义 `OPENAI_BASE_URL` 调用第三方 OpenAI-compatible 图片接口的场景。
 
+[飞书详细教程](https://mcn724t9vlfu.feishu.cn/wiki/PKulwF8m9ip22Ukevn9cKkl9nXe?fromScene=spaceOverview)
+
 </div>
 
 ## 这是什么
