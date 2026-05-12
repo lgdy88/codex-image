@@ -2,162 +2,40 @@
 
 # codex-image
 
-**A practical Codex image skill for people who want real saved files, exact paths, multi-image edits, batch jobs, and explicit image reuse.**
+**一个给 Codex 使用的本地图片生成与编辑 skill。**
 
-Built for the workflows that the native built-in image path does not try to optimize:
-**save to disk**, **edit from real local files**, **merge multiple references**, **carry forward previous outputs**, and **run through API-key mode or custom gateways**.
+它适合需要把图片保存到本地文件、指定输出路径、使用多张参考图、批量生成，或通过 API key 和自定义 `OPENAI_BASE_URL` 调用第三方 OpenAI-compatible 图片接口的场景。
 
 </div>
 
-## Gallery
+## 这是什么
 
-Real outputs created with this skill:
+`codex-image` 是一个 Codex skill。它让 Codex 在需要生成或编辑图片时调用本地脚本，再通过 OpenAI-compatible Images API 发起请求，并把结果保存成真实的 PNG/JPEG/WebP 文件。
 
-| One-shot generate | Character + real-person harmony |
-| --- | --- |
-| ![Doraemon demo](./docs/assets/doraemon-demo.png) | ![Beauty and Doraemon demo](./docs/assets/beauty-doraemon-demo.png) |
-| Multi-person scene edit | Identity-consistent portrait grid |
-| ![Basketball singing demo](./docs/assets/basketball-singing-demo.png) | ![Portrait grid demo](./docs/assets/portrait-grid-demo.png) |
+它不是把 `gpt-image-2` 变成 Codex 的主模型，也不是替换 Codex 的代码模型。Codex 仍然负责对话、读代码、改文件和执行命令；`codex-image` 只是在图片任务中作为工具被调用。
 
-## Why this exists
+这个 fork 在上游基础上增加了请求头兼容处理：默认发送 `User-Agent: curl/8.0`，并支持通过 `CODEX_IMAGE_USER_AGENT` 覆盖。这个改动用于兼容部分带 Cloudflare 或浏览器签名过滤的第三方图片网关。
 
-The built-in/system `imagegen` path is better when you want the **native current-turn image conversation**:
+## 适合什么场景
 
-- fastest simple generate/edit
-- natural multi-turn continuation
-- runtime-native image context
+- 在 Codex Desktop 里让 Codex 生成图片，并保存到当前工作区。
+- 使用第三方 OpenAI-compatible 图片接口，例如自定义 `OPENAI_BASE_URL`。
+- 指定输出尺寸、比例、文件名或输出目录。
+- 对本地图片做编辑、局部重绘或多参考图合成。
+- 用 JSONL 批量生成多张图片。
+- 需要明确的本地文件路径，而不是只在聊天窗口里显示图片。
 
-`codex-image` is for the other half of the problem:
+## 不适合什么场景
 
-- exact `--out` / `--out-dir`
-- saved files on disk
-- multi-image edits and merges
-- masks and `input_fidelity`
-- batch generation from JSONL
-- explicit thread-aware reuse like `[Last Output]`
-- API key mode and custom `OPENAI_BASE_URL`
+- 想把 Codex 的主对话模型切换成图片模型。
+- 只想用 Codex 内置的原生图片对话能力，并且不关心保存路径。
+- 想用 SVG、HTML/CSS、Canvas 等代码方式生成图形。
 
-So this repo is not trying to replace built-in `imagegen` with a thinner clone.  
-It is trying to make the **local saved-file image workflow** much better.
+## 安装到 Codex Desktop
 
-## What it feels like in practice
+### PowerShell 安装
 
-Three common examples:
-
-1. **One-shot local generation**
-   - "给我生成一个哆啦 A 梦"
-   - save directly to a predictable local file
-
-2. **Reference-based editing**
-   - use one uploaded person reference plus one generated Doraemon result
-   - merge them into one harmonious scene
-
-3. **Complex multi-image composition**
-   - combine two people into one basketball stage scene
-   - preserve a short lyric element like `鸡你太美`
-   - still save the final PNG locally
-
-The published skill lives at [`skills/codex-image`](./skills/codex-image).
-
-Suggested GitHub topics: `codex`, `codex-skill`, `image-generation`, `openai`, `openai-images-api`, `gpt-image-2`, `images-api`, `python-cli`.
-
-## Why use codex-image
-
-- It is purpose-built for Codex API key mode when the built-in image tool is unavailable or not being used.
-- It reads Codex-friendly auth and provider settings from environment variables, `$CODEX_HOME/auth.json`, and `$CODEX_HOME/config.toml`.
-- It writes generated or edited images to deterministic local files instead of relying on inline image output.
-- It supports practical delivery sizes, ratio shortcuts, multi-image edits, masks, `input_fidelity`, and JSONL batch generation.
-- It supports explicit thread-local reuse such as `[Last Output]`, `[Turn -K Image #N]`, and `--image-set ...`.
-
-## Quick choice guide
-
-Use built-in/system `imagegen` when you want:
-
-- native current-turn image context
-- the fastest simple image conversation
-- normal follow-up editing with as little local workflow as possible
-
-Use `codex-image` when you want:
-
-- exact output path or directory
-- local saved files every time
-- multiple explicit reference images
-- masks and local edit controls
-- API-key mode or custom base URLs
-- batch jobs
-- explicit thread-aware reuse
-
-## What it supports
-
-- `generate`: create a new image, defaulting to `POST /v1/images/generations`
-- `edit`: edit or synthesize from one or more input images, defaulting to `POST /v1/images/edits`
-- `generate-batch`: run many generation jobs from a JSONL file
-- Explicit `POST /v1/responses` fallback via `--transport responses` for prior-response image state
-- Config and auth discovery from `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `$CODEX_HOME/auth.json`, and `$CODEX_HOME/config.toml`
-- Direct size requests, including explicit non-standard values such as `1000x1800`
-- Ratio-style input such as `16:9`, `9:16`, and `6:16`, normalized into valid image sizes
-- Ratio-tier input such as `9:16@1k`, `9:16@2k`, and `9:16@4k`, resolved before calling the API
-- Multi-image reference/edit requests, optional edit mask, and `input_fidelity`
-- Thread-aware explicit image reuse through placeholders and image sets
-- Saved-output dimension verification with safe post-processing for close aspect-ratio mismatches
-- Multi-image output with `--n`
-- Cross-platform scripts for macOS, Linux, and Windows
-
-## Positioning
-
-- Use built-in/system `imagegen` first when the user wants the normal native
-  image conversation path:
-  - current-turn image context
-  - fastest simple generate/edit
-  - natural multi-turn continuation
-- Use `codex-image` when the user wants:
-  - local saved files
-  - exact output path or output directory
-  - API key mode
-  - custom `OPENAI_BASE_URL`
-  - batch jobs
-  - explicit image reuse such as `[Last Output]`
-- `codex-image` returns saved files on disk. It does not provide native built-in
-  inline image output.
-- `codex-image` can approximate thread-aware image reuse, but it is still a
-  local skill workflow rather than a runtime-native image tool.
-
-For the full architectural comparison, see
-[docs/image-workflows.md](./docs/image-workflows.md).
-
-That document now also includes:
-
-- concrete request-shape-to-scenario mapping
-- when to use built-in `imagegen`
-- when to use `codex-image`
-- why some flows are better in one path than the other
-- concrete request shapes for:
-  - `POST /v1/images/generations`
-  - `POST /v1/images/edits`
-  - `POST /v1/responses`
-
-## Feature highlights
-
-- **Saved-file first**
-  - deterministic local outputs instead of only inline image results
-- **Exact output control**
-  - `--out`, `--out-dir`, `--name`, exact delivery size
-- **Better edit workflows**
-  - multiple references, masks, `input_fidelity`, explicit carry-forward
-- **Thread-aware reuse**
-  - `[Image #N]`, `[Turn -K Image #N]`, `[Thread Image #N]`, `[Last Output]`
-- **Batch generation**
-  - JSONL prompt sets for repeated production work
-- **Transport split that matches real use**
-  - Images API by default
-  - Responses API only when explicit prior response state is actually needed
-
-## Install
-
-### Install into Codex Desktop
-
-Use this fork when you want the request-header compatibility fix for some
-OpenAI-compatible image gateways:
+如果你在 Windows 上使用 Codex Desktop，推荐用这个命令安装：
 
 ```powershell
 python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
@@ -165,12 +43,17 @@ python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-s
   --path skills/codex-image
 ```
 
-If `codex-image` is already installed, move or delete the existing
-`$env:USERPROFILE\.codex\skills\codex-image` directory first, then run the
-installer again. Restart Codex Desktop after installation so the new skill is
-loaded.
+如果本机已经安装过 `codex-image`，先移动或删除旧目录：
 
-### Option 1: Official skill-installer with repo and path
+```powershell
+Move-Item "$env:USERPROFILE\.codex\skills\codex-image" "$env:USERPROFILE\.codex\skills\.disabled\codex-image-backup"
+```
+
+然后重新运行安装命令。
+
+安装完成后重启 Codex Desktop，让新 skill 进入可见能力列表。
+
+### macOS / Linux 安装
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
@@ -178,14 +61,14 @@ python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/inst
   --path skills/codex-image
 ```
 
-### Option 2: Official skill-installer with GitHub URL
+也可以用 GitHub URL 安装：
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
   --url https://github.com/lgdy88/codex-image/tree/main/skills/codex-image
 ```
 
-### Option 3: Manual install
+### 手动安装
 
 ```bash
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
@@ -193,16 +76,18 @@ git clone https://github.com/lgdy88/codex-image.git /tmp/codex-image
 cp -R /tmp/codex-image/skills/codex-image "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-Restart Codex after installation.
+## 配置第三方生图模型
 
-## Configuration
+`codex-image` 默认读取环境变量和 Codex 配置。第三方 OpenAI-compatible 图片网关通常需要配置：
 
-### Configure a third-party image gateway
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `CODEX_IMAGE_MODEL`
+- 可选：`CODEX_IMAGE_USER_AGENT`
 
-`codex-image` uses the Images API as a tool call. It does not replace the main
-Codex coding/chat model.
+### Windows PowerShell
 
-PowerShell user-level setup:
+把 `https://api.example.com/v1` 换成你的第三方请求地址，把 `your-new-api-key` 换成你的新 API key。
 
 ```powershell
 [Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "https://api.example.com/v1", "User")
@@ -210,74 +95,55 @@ PowerShell user-level setup:
 [Environment]::SetEnvironmentVariable("CODEX_IMAGE_MODEL", "gpt-image-2", "User")
 ```
 
-Optional gateway compatibility override:
+如果第三方网关会拦截 Python 默认请求头，可以设置：
 
 ```powershell
 [Environment]::SetEnvironmentVariable("CODEX_IMAGE_USER_AGENT", "curl/8.0", "User")
 ```
 
-Restart Codex Desktop after changing user-level environment variables. Keep API
-keys out of README files, prompts, screenshots, commits, and issue comments.
+修改用户级环境变量后，重启 Codex Desktop。
 
-Preferred runtime sources:
+### macOS / Linux
 
-1. provider-specific env key from `${CODEX_HOME:-~/.codex}/config.toml`
-2. `OPENAI_API_KEY`
-3. `${CODEX_HOME:-~/.codex}/auth.json`
-4. `OPENAI_BASE_URL`
-5. `${CODEX_HOME:-~/.codex}/config.toml`
-
-Optional environment variables:
-
-- `CODEX_IMAGE_MODEL`
-- `CODEX_IMAGE_SIZE`
-- `CODEX_IMAGE_QUALITY`
-- `CODEX_IMAGE_BACKGROUND`
-- `CODEX_IMAGE_FORMAT`
-- `CODEX_IMAGE_COMPRESSION`
-- `CODEX_IMAGE_OUTPUT_DIR`
-- `CODEX_IMAGE_TIMEOUT`
-- `CODEX_IMAGE_USER_AGENT`
-- `CODEX_IMAGE_MODEL_PROVIDER`
-
-Model behavior:
-
-- `CODEX_IMAGE_MODEL` is the Images API model, such as `gpt-image-2`
-- The default transport is the Images API
-- An explicit Responses transport is available when prior response image state
-  is part of the task
-- Official `gpt-image-2` requests reject transparent background locally before
-  the request is sent
-- In API key mode, `OPENAI_BASE_URL` or an equivalent provider `base_url` is required
-- `CODEX_IMAGE_USER_AGENT` can override the HTTP user agent for OpenAI-compatible
-  gateways that filter command-line clients; never put secrets in this value
-
-Dependency note:
-
-- `codex-image` itself uses Python standard library only
-- Python 3.11 or newer is required
-- when a related workflow needs Python deps such as the OpenAI SDK, install them into `${CODEX_HOME:-$HOME/.codex}/.venv`
-
-## Usage
-
-### Ask Codex to use this skill
-
-After installation and configuration, ask Codex for a saved image workflow:
-
-```text
-Use codex-image to generate a 16:9 futuristic city image and save it to the current workspace.
+```bash
+export OPENAI_BASE_URL="https://api.example.com/v1"
+export OPENAI_API_KEY="your-new-api-key"
+export CODEX_IMAGE_MODEL="gpt-image-2"
+export CODEX_IMAGE_USER_AGENT="curl/8.0"
 ```
 
-Chinese example:
+### 安全提醒
+
+不要把真实 API key 写进：
+
+- README
+- prompt
+- issue / PR
+- 截图
+- commit
+- shell 历史中会公开的命令
+
+如果 API key 已经发到聊天、仓库或截图里，应当去服务商后台撤销并重新生成。
+
+## 让 Codex 调用 codex-image
+
+安装并配置完成后，可以直接在 Codex Desktop 里这样说：
 
 ```text
 用 codex-image 生成一张 16:9 的未来城市图，保存到当前工作区。
 ```
 
-Codex should route that request to the local `codex-image` skill, call the
-configured OpenAI-compatible image endpoint, and return the saved file path.
+英文也可以：
 
-Manual Windows smoke test:
+```text
+Use codex-image to generate a 16:9 futuristic city image and save it to the current workspace.
+```
+
+Codex 应当把这个请求路由到本地 `codex-image` skill，调用已配置的 OpenAI-compatible 图片接口，然后返回保存后的文件路径。
+
+## 手动测试
+
+### Windows
 
 ```powershell
 & "$env:USERPROFILE\.codex\skills\codex-image\scripts\codex-image.cmd" generate `
@@ -287,40 +153,37 @@ Manual Windows smoke test:
   "A cinematic futuristic city skyline at night, wide 16:9 composition, no readable text, no watermark"
 ```
 
-Generate a 4K image directly:
+### macOS / Linux
+
+```bash
+bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
+  --model gpt-image-2 \
+  --size 16:9 \
+  --out-dir ./generated-images \
+  "A cinematic futuristic city skyline at night, wide 16:9 composition, no readable text, no watermark"
+```
+
+## 常用命令
+
+### 按比例生成
+
+```bash
+bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
+  --model gpt-image-2 \
+  --size 16:9 \
+  "Draw a clean futuristic AI wallpaper"
+```
+
+### 指定输出尺寸
 
 ```bash
 bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
   --model gpt-image-2 \
   --size 3840x2160 \
-  "Draw a Doraemon-inspired large language model infographic, image only, no text"
+  "Draw a cinematic futuristic city skyline, no readable text, no watermark"
 ```
 
-Generate from an aspect ratio:
-
-```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
-  --size 16:9 \
-  "Draw a clean futuristic AI wallpaper"
-```
-
-Generate from a ratio tier:
-
-```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
-  --size '9:16@1k' \
-  "Create a vertical mobile livestream screenshot mockup"
-```
-
-Generate with an explicit non-standard delivery size:
-
-```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
-  --size 1000x1800 \
-  "Create a vertical promotional poster"
-```
-
-Edit:
+### 编辑本地图片
 
 ```bash
 bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" edit \
@@ -329,49 +192,17 @@ bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" edit \
   --prompt "Keep the subject and change the background to a bright blue futuristic scene"
 ```
 
-Edit with a mask:
-
-```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" edit \
-  --image ./input.png \
-  --mask ./mask.png \
-  --input-fidelity high \
-  "Replace only the masked area with a futuristic blue glow"
-```
-
-Create a new promotional image from multiple input references:
+### 多参考图合成
 
 ```bash
 bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" edit \
   --image ./person.png \
-  --image ./bag.png \
+  --image ./product.png \
   --size 16:9 \
-  "Input image 1 role: person reference. Input image 2 role: handbag product reference. Create a polished commercial promotional image showing the person from input image 1 holding the handbag from input image 2. No logos, no readable text, no watermark."
+  "Input image 1 role: person reference. Input image 2 role: product reference. Create a polished commercial image showing the person holding the product. No logos, no readable text, no watermark."
 ```
 
-Use `edit`, not `generate`, whenever image files are provided for the model to see. Multiple input files are sent as repeated multipart `image` fields.
-If `generate` is called with `--image`, the CLI warns and reroutes the request to `edit`.
-
-Continue refining a prior response explicitly:
-
-```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" edit \
-  --transport responses \
-  --previous-response-id resp_123 \
-  --prompt "Keep the composition and make it more realistic"
-```
-
-Generate multiple variants from one prompt:
-
-```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate \
-  --size 16:9 \
-  --n 3 \
-  --out-dir ./output/variants \
-  "Draw a clean futuristic AI wallpaper"
-```
-
-Batch generate from JSONL:
+### 批量生成
 
 ```bash
 bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" generate-batch \
@@ -379,19 +210,68 @@ bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" genera
   --out-dir ./output/batch
 ```
 
-The POSIX launcher auto-selects a usable Python 3.11+ interpreter from a small known list or `CODEX_IMAGE_PYTHON`; invoke it through `bash` so ZIP-based installs do not depend on the executable bit. On Windows, use `codex-image.cmd`, which accepts `%CODEX_HOME%\skills\codex-image\scripts\codex-image.cmd` or `%USERPROFILE%\.codex\skills\codex-image\scripts\codex-image.cmd`. Once Codex routes into this skill, usually run the launcher first and let the script report missing credentials or unsupported runtime details; reach for config/auth files or `--help` only when the launcher is missing or its failure still leaves the command shape unclear.
+## 功能概览
 
-## Output paths
+- `generate`：通过 `POST /v1/images/generations` 生成新图片。
+- `edit`：通过 `POST /v1/images/edits` 编辑一张或多张本地图片。
+- `generate-batch`：从 JSONL 批量生成图片。
+- 支持 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`$CODEX_HOME/auth.json`、`$CODEX_HOME/config.toml`。
+- 支持 `16:9`、`9:16`、`9:16@1k`、`3840x2160` 等尺寸写法。
+- 支持 `--out`、`--out-dir`、`--name` 指定保存位置。
+- 支持多图输入、mask、`input_fidelity`。
+- 支持 `[Last Output]`、`[Image #N]`、`[Turn -K Image #N]` 等 Codex 线程内图片引用。
+- 返回真实本地文件路径，便于继续编辑、上传或纳入项目资产。
 
-- Inside Codex, default output is `${CODEX_HOME:-~/.codex}/generated_images/<thread-or-session-id>/`
-- Outside Codex, default output is `${CODEX_HOME:-~/.codex}/generated_images/manual/`
-- `--out` writes to an exact file path
-- `--out-dir` is the simplest choice for multi-image output and batch runs
-- `--name` keeps the default output directory and adds a readable prefix plus a random suffix
-- `--n > 1` writes numbered sibling files
-- Unlike the built-in image tool, standalone CLI runs do not have a real `<call_id>` segment
+## 环境变量参考
 
-## Repository layout
+| 变量 | 说明 |
+| --- | --- |
+| `OPENAI_API_KEY` | 图片接口 API key |
+| `OPENAI_BASE_URL` | OpenAI-compatible API base URL，例如 `https://api.example.com/v1` |
+| `CODEX_IMAGE_MODEL` | 图片模型，例如 `gpt-image-2` |
+| `CODEX_IMAGE_SIZE` | 默认尺寸，例如 `1024x1024` 或 `16:9` |
+| `CODEX_IMAGE_QUALITY` | 默认质量，例如 `low`、`medium`、`high`、`auto` |
+| `CODEX_IMAGE_BACKGROUND` | 背景策略，例如 `auto`、`opaque`、`transparent` |
+| `CODEX_IMAGE_FORMAT` | 输出格式，例如 `png`、`jpeg`、`webp` |
+| `CODEX_IMAGE_COMPRESSION` | JPEG/WebP 压缩参数 |
+| `CODEX_IMAGE_OUTPUT_DIR` | 默认输出目录 |
+| `CODEX_IMAGE_TIMEOUT` | 请求超时时间 |
+| `CODEX_IMAGE_USER_AGENT` | 自定义 HTTP `User-Agent`，用于兼容部分第三方网关 |
+| `CODEX_IMAGE_MODEL_PROVIDER` | 从 Codex `config.toml` 选择指定 provider |
+
+## 输出位置
+
+- 在 Codex 线程内，默认输出到 `${CODEX_HOME:-~/.codex}/generated_images/<thread-or-session-id>/`。
+- 在手动 CLI 调用中，默认输出到 `${CODEX_HOME:-~/.codex}/generated_images/manual/`。
+- 使用 `--out` 可以指定单个输出文件。
+- 使用 `--out-dir` 可以指定输出目录。
+- 使用 `--name` 可以指定输出文件名前缀。
+
+## 常见问题
+
+### 这是 Codex 的图片主模型吗？
+
+不是。它是一个本地 skill。Codex 仍然使用自己的主模型完成对话和编码任务；只有当你要求生成或编辑图片时，Codex 才调用这个 skill。
+
+### 为什么要设置 `CODEX_IMAGE_USER_AGENT`？
+
+有些第三方 OpenAI-compatible 网关会根据请求头或客户端特征做过滤。这个 fork 默认发送 `curl/8.0` 作为 `User-Agent`，必要时可以用 `CODEX_IMAGE_USER_AGENT` 覆盖。
+
+### 能不能直接使用真实第三方地址写进 README？
+
+不建议。README 应使用 `https://api.example.com/v1` 这类占位地址。真实地址和 API key 应放在本机环境变量中。
+
+### 提示词里要不要写 `codex-image`？
+
+建议写。比如：
+
+```text
+用 codex-image 生成一张 16:9 的未来城市图，保存到当前工作区。
+```
+
+这样 Codex 更容易选择这个 skill，而不是走其他图片路径。
+
+## 项目结构
 
 ```text
 codex-image/
@@ -407,20 +287,26 @@ codex-image/
         └── scripts/
 ```
 
-## Testing
+## 测试
 
-Run the repo tests from the repository root:
+从仓库根目录运行：
 
 ```bash
-/opt/homebrew/bin/python3.12 -m unittest discover -s ./tests -p 'test_*.py'
+python -m unittest discover -s ./tests -p 'test_*.py'
 ```
 
-## Skill docs
+Windows 上如果全量测试遇到路径转义或控制台编码问题，可以先跑与 transport/header 相关的测试：
 
-- Main skill entry: [`skills/codex-image/SKILL.md`](./skills/codex-image/SKILL.md)
-- Workflow comparison: [`docs/image-workflows.md`](./docs/image-workflows.md)
-- CLI reference: [`skills/codex-image/references/cli.md`](./skills/codex-image/references/cli.md)
-- Transport parameter reference: [`skills/codex-image/references/image-api.md`](./skills/codex-image/references/image-api.md)
-- Prompt guidance: [`skills/codex-image/references/prompting.md`](./skills/codex-image/references/prompting.md)
-- Sample prompts: [`skills/codex-image/references/sample-prompts.md`](./skills/codex-image/references/sample-prompts.md)
-- Runtime/auth notes: [`skills/codex-image/references/codex-network.md`](./skills/codex-image/references/codex-network.md)
+```bash
+python -m unittest tests.test_transport_regressions
+```
+
+## 参考文档
+
+- 主 skill 入口：[`skills/codex-image/SKILL.md`](./skills/codex-image/SKILL.md)
+- 工作流比较：[`docs/image-workflows.md`](./docs/image-workflows.md)
+- CLI 参考：[`skills/codex-image/references/cli.md`](./skills/codex-image/references/cli.md)
+- Images API 参数参考：[`skills/codex-image/references/image-api.md`](./skills/codex-image/references/image-api.md)
+- 提示词参考：[`skills/codex-image/references/prompting.md`](./skills/codex-image/references/prompting.md)
+- 示例提示词：[`skills/codex-image/references/sample-prompts.md`](./skills/codex-image/references/sample-prompts.md)
+- 运行时与认证说明：[`skills/codex-image/references/codex-network.md`](./skills/codex-image/references/codex-network.md)
