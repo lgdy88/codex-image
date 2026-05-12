@@ -66,6 +66,7 @@ Local saved-file raster image workflow backed by `scripts/codex_image.py`, shell
 - Use `--out-dir` for batch or multi-output jobs.
 - Use `--name` for a readable prefix with an automatic random suffix.
 - For project-bound assets, save or move the final image into the workspace before finishing.
+- When reporting a saved local image in Codex desktop, embed a Markdown image using an absolute path with forward slashes, for example `![alt](C:/Users/name/project/image.png)`. Keep any Windows backslash path only as plain text if useful.
 - Keep edits non-destructive by default unless the user explicitly asked to overwrite.
 - Successful `responses` calls record the latest response ids under the thread output directory for follow-up reuse.
 
@@ -84,7 +85,7 @@ Local saved-file raster image workflow backed by `scripts/codex_image.py`, shell
    - preserve the requested final delivery size as the post-save target
 7. Run the bundled launcher.
 8. Validate subject, composition, text, and invariants.
-9. Report the final saved path.
+9. Report the final saved path. In Codex desktop, include a Markdown image preview with a forward-slash absolute local path so the image renders inline.
 
 ## Size and post-processing policy
 
