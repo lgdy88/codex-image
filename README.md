@@ -37,23 +37,21 @@
 
 ### PowerShell 安装
 
-如果你在 Windows 上使用 Codex Desktop，推荐用这个命令安装：
+如果你在 Windows 上使用 Codex Desktop，推荐用一键安装/更新命令：
 
 ```powershell
-python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
-  --repo lgdy88/codex-image `
-  --path skills/codex-image
+iwr -UseBasicParsing https://raw.githubusercontent.com/lgdy88/codex-image/main/scripts/install-codex-image.ps1 -OutFile "$env:TEMP\install-codex-image.ps1"; powershell -ExecutionPolicy Bypass -File "$env:TEMP\install-codex-image.ps1"
 ```
 
-如果本机已经安装过 `codex-image`，先移动或删除旧目录：
-
-```powershell
-Move-Item "$env:USERPROFILE\.codex\skills\codex-image" "$env:USERPROFILE\.codex\skills\.disabled\codex-image-backup"
-```
-
-然后重新运行安装命令。
+这条命令可以重复执行：未安装时会安装，已安装时会备份旧版本并同步 GitHub 最新版本。安装或更新后会检查私有配置文件；未配置会进入配置向导，已配置会询问是否更新配置。
 
 安装完成后重启 Codex Desktop，让新 skill 进入可见能力列表。
+
+如果你只想更新 skill 文件、不进入配置向导，可以下载脚本后加 `-SkipConfigure`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\install-codex-image.ps1" -SkipConfigure
+```
 
 ### macOS / Linux 安装
 
@@ -80,16 +78,57 @@ cp -R /tmp/codex-image/skills/codex-image "${CODEX_HOME:-$HOME/.codex}/skills/"
 
 ## 配置第三方生图模型
 
-`codex-image` 默认读取环境变量和 Codex 配置。第三方 OpenAI-compatible 图片网关通常需要配置：
+推荐使用 `codex-image configure` 写入 Codex 用户目录下的私有配置文件，避免污染全局 `OPENAI_BASE_URL` / `OPENAI_API_KEY` 环境变量。
+
+配置文件默认位置：
+
+```text
+%USERPROFILE%\.codex\codex-image\config.json
+```
+
+### Windows PowerShell
+
+```powershell
+& "$env:USERPROFILE\.codex\skills\codex-image\scripts\codex-image.cmd" configure
+```
+
+按提示依次输入：
+
+```text
+OPENAI-compatible base URL:
+API key:
+Model [gpt-image-2]:
+```
+
+`Model [gpt-image-2]:` 直接回车会使用默认模型 `gpt-image-2`。
+
+`configure` 会在完成后明文打印 API key 供核对。请不要把终端截图、日志或复制内容发到公开位置。
+
+### macOS / Linux
+
+```bash
+bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" configure
+```
+
+### 可选：环境变量兼容方式
+
+`codex-image` 仍兼容环境变量和 Codex 配置。第三方 OpenAI-compatible 图片网关通常需要配置：
 
 - `OPENAI_BASE_URL`
 - `OPENAI_API_KEY`
 - `CODEX_IMAGE_MODEL`
 - 可选：`CODEX_IMAGE_USER_AGENT`
 
-### Windows PowerShell
+如果要避免影响其他 OpenAI-compatible 工具，优先使用专属变量：
 
-把 `https://api.example.com/v1` 换成你的第三方请求地址，把 `your-new-api-key` 换成你的新 API key。
+```powershell
+[Environment]::SetEnvironmentVariable("CODEX_IMAGE_BASE_URL", "https://api.example.com/v1", "User")
+[Environment]::SetEnvironmentVariable("CODEX_IMAGE_API_KEY", "your-new-api-key", "User")
+[Environment]::SetEnvironmentVariable("CODEX_IMAGE_MODEL", "gpt-image-2", "User")
+```
+
+旧版通用变量仍可使用，但可能影响其他工具：
+
 
 ```powershell
 [Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "https://api.example.com/v1", "User")
@@ -104,15 +143,6 @@ cp -R /tmp/codex-image/skills/codex-image "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
 修改用户级环境变量后，重启 Codex Desktop。
-
-### macOS / Linux
-
-```bash
-export OPENAI_BASE_URL="https://api.example.com/v1"
-export OPENAI_API_KEY="your-new-api-key"
-export CODEX_IMAGE_MODEL="gpt-image-2"
-export CODEX_IMAGE_USER_AGENT="curl/8.0"
-```
 
 ### 安全提醒
 
@@ -228,8 +258,8 @@ bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" genera
 
 | 变量 | 说明 |
 | --- | --- |
-| `OPENAI_API_KEY` | 图片接口 API key |
-| `OPENAI_BASE_URL` | OpenAI-compatible API base URL，例如 `https://api.example.com/v1` |
+| `CODEX_IMAGE_API_KEY` | 图片接口 API key，优先于通用 `OPENAI_API_KEY` |
+| `CODEX_IMAGE_BASE_URL` | OpenAI-compatible API base URL，例如 `https://api.example.com/v1`，优先于通用 `OPENAI_BASE_URL` |
 | `CODEX_IMAGE_MODEL` | 图片模型，例如 `gpt-image-2` |
 | `CODEX_IMAGE_SIZE` | 默认尺寸，例如 `1024x1024` 或 `16:9` |
 | `CODEX_IMAGE_QUALITY` | 默认质量，例如 `low`、`medium`、`high`、`auto` |
@@ -240,6 +270,9 @@ bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" genera
 | `CODEX_IMAGE_TIMEOUT` | 请求超时时间 |
 | `CODEX_IMAGE_USER_AGENT` | 自定义 HTTP `User-Agent`，用于兼容部分第三方网关 |
 | `CODEX_IMAGE_MODEL_PROVIDER` | 从 Codex `config.toml` 选择指定 provider |
+| `CODEX_IMAGE_CONFIG` | 覆盖私有配置文件路径，默认是 `%USERPROFILE%\.codex\codex-image\config.json` |
+| `OPENAI_API_KEY` | 兼容旧版的通用 API key，可能影响其他工具 |
+| `OPENAI_BASE_URL` | 兼容旧版的通用 API base URL，可能影响其他工具 |
 
 ## 输出位置
 
@@ -261,7 +294,7 @@ bash "${CODEX_HOME:-$HOME/.codex}/skills/codex-image/scripts/codex-image" genera
 
 ### 能不能直接使用真实第三方地址写进 README？
 
-不建议。README 应使用 `https://api.example.com/v1` 这类占位地址。真实地址和 API key 应放在本机环境变量中。
+不建议。README 应使用 `https://api.example.com/v1` 这类占位地址。真实地址和 API key 应放在 `codex-image configure` 创建的私有配置文件中，或放在本机专属环境变量 `CODEX_IMAGE_BASE_URL` / `CODEX_IMAGE_API_KEY` 中。
 
 ### 提示词里要不要写 `codex-image`？
 

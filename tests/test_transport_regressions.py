@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from email.message import Message
 from pathlib import Path
+from urllib import error, request
 from unittest import mock
 
 
@@ -37,6 +38,103 @@ class ResponsesTransportRegressionTests(unittest.TestCase):
             "provider_id": None,
             "provider_env_key": None,
         }
+
+    def test_configure_writes_private_config_and_echoes_plain_key(self):
+        parser = codex_image.build_parser()
+        args = parser.parse_args(["configure"])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            answers = iter(["https://images.example.com/v1", "sk-visible-key", "custom-image-model"])
+            with mock.patch.dict(os.environ, {"CODEX_IMAGE_CONFIG": str(config_path)}, clear=False):
+                with mock.patch("builtins.input", side_effect=lambda _prompt: next(answers)):
+                    with mock.patch("builtins.print") as mock_print:
+                        result = codex_image.cmd_configure(args)
+
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(payload["base_url"], "https://images.example.com/v1")
+        self.assertEqual(payload["api_key"], "sk-visible-key")
+        self.assertEqual(payload["model"], "custom-image-model")
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertIn("API key: sk-visible-key", printed)
+        self.assertIn("WARNING", printed)
+
+    def test_configure_uses_default_model_when_blank(self):
+        parser = codex_image.build_parser()
+        args = parser.parse_args(["configure"])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            answers = iter(["https://images.example.com/v1", "sk-key", ""])
+            with mock.patch.dict(os.environ, {"CODEX_IMAGE_CONFIG": str(config_path)}, clear=False):
+                with mock.patch("builtins.input", side_effect=lambda _prompt: next(answers)):
+                    with mock.patch("builtins.print"):
+                        codex_image.cmd_configure(args)
+
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["model"], codex_image.DEFAULT_MODEL)
+
+    def test_resolve_runtime_prefers_private_config_over_openai_env(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "base_url": "https://private.example.com/v1",
+                        "api_key": "sk-private",
+                        "model": "private-image-model",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "CODEX_HOME": tmpdir,
+                    "CODEX_IMAGE_CONFIG": str(config_path),
+                    "OPENAI_BASE_URL": "https://openai-env.example.com/v1",
+                    "OPENAI_API_KEY": "sk-openai-env",
+                },
+                clear=True,
+            ):
+                runtime = codex_image.resolve_runtime()
+
+        self.assertEqual(runtime["base_url"], "https://private.example.com/v1")
+        self.assertEqual(runtime["api_key"], "sk-private")
+        self.assertEqual(runtime["model"], "private-image-model")
+
+    def test_codex_image_env_overrides_private_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "base_url": "https://private.example.com/v1",
+                        "api_key": "sk-private",
+                        "model": "private-image-model",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "CODEX_HOME": tmpdir,
+                    "CODEX_IMAGE_CONFIG": str(config_path),
+                    "CODEX_IMAGE_BASE_URL": "https://override.example.com/v1",
+                    "CODEX_IMAGE_API_KEY": "sk-override",
+                    "CODEX_IMAGE_MODEL": "override-image-model",
+                },
+                clear=True,
+            ):
+                runtime = codex_image.resolve_runtime()
+
+        self.assertEqual(runtime["base_url"], "https://override.example.com/v1")
+        self.assertEqual(runtime["api_key"], "sk-override")
+        self.assertEqual(runtime["model"], "override-image-model")
 
     def test_responses_edit_followup_without_input_images_uses_safe_default_name(self):
         parser = codex_image.build_parser()
@@ -372,6 +470,14 @@ class ResponsesTransportRegressionTests(unittest.TestCase):
             cli_text,
         )
 
+    def test_cli_reference_documents_configure_and_private_config_priority(self):
+        cli_text = (SKILL_ROOT / "references" / "cli.md").read_text(encoding="utf-8")
+
+        self.assertIn("`configure`", cli_text)
+        self.assertIn("codex-image/config.json", cli_text)
+        self.assertIn("CODEX_IMAGE_*", cli_text)
+        self.assertIn("legacy `OPENAI_*`", cli_text)
+
     def test_build_headers_sets_configurable_user_agent(self):
         with mock.patch.dict(os.environ, {"CODEX_IMAGE_USER_AGENT": "custom-client/1.0"}, clear=False):
             headers = codex_image.build_headers("key", "application/json")
@@ -385,6 +491,31 @@ class ResponsesTransportRegressionTests(unittest.TestCase):
             headers = codex_image.build_headers("key", "application/json")
 
         self.assertEqual(headers["User-Agent"], codex_image.DEFAULT_USER_AGENT)
+
+    def test_execute_request_explains_urlerror_timeout(self):
+        req = request.Request("https://example.com/v1/images/generations")
+
+        with mock.patch.object(codex_image.request, "urlopen", side_effect=error.URLError(TimeoutError("timed out"))):
+            with self.assertRaises(SystemExit):
+                with mock.patch("sys.stderr") as stderr:
+                    codex_image.execute_request(req, 12)
+
+        output = "".join(call.args[0] for call in stderr.write.call_args_list if call.args)
+        self.assertIn("request timed out after 12s", output)
+        self.assertIn("CODEX_IMAGE_TIMEOUT", output)
+        self.assertIn("alternate API base URL", output)
+
+    def test_execute_request_explains_socket_timeout(self):
+        req = request.Request("https://example.com/v1/images/generations")
+
+        with mock.patch.object(codex_image.request, "urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(SystemExit):
+                with mock.patch("sys.stderr") as stderr:
+                    codex_image.execute_request(req, 8)
+
+        output = "".join(call.args[0] for call in stderr.write.call_args_list if call.args)
+        self.assertIn("request timed out after 8s", output)
+        self.assertIn("smaller image", output)
 
 
 if __name__ == "__main__":

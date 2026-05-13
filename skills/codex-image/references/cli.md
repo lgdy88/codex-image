@@ -15,6 +15,7 @@ On Windows, use `%CODEX_HOME%\skills\codex-image\scripts\codex-image.cmd` or `%U
 - `generate`: default `POST /v1/images/generations`; explicit `--transport responses` uses `POST /v1/responses`
 - `edit`: default `POST /v1/images/edits`; explicit `--transport responses` uses `POST /v1/responses`
 - `generate-batch`: many generation jobs from JSONL
+- `configure`: writes private API settings to `${CODEX_HOME:-~/.codex}/codex-image/config.json`
 
 ## Common shapes
 
@@ -33,6 +34,7 @@ bash "$CODEX_IMAGE" edit --image-set active --image-set latest-turn "In a Codex 
 bash "$CODEX_IMAGE" edit --image '[Turn -1 Image #1]' --image '[Turn -1 Image #2]' --image '[Image #1]' "After a follow-up with one new attachment, carry forward the prior two images plus the new one"
 bash "$CODEX_IMAGE" edit --image '[Last Output]' --image '[Image #1]' "Refine the last result image and use the current upload as a new realism/style reference"
 bash "$CODEX_IMAGE" generate-batch --input ./prompts.jsonl --out-dir ./output/batch
+bash "$CODEX_IMAGE" configure
 ```
 
 ## Key rules
@@ -42,6 +44,8 @@ bash "$CODEX_IMAGE" generate-batch --input ./prompts.jsonl --out-dir ./output/ba
 - `generate` and `edit` stay on the Images API by default; use `--transport responses` only when explicit prior response image state is part of the task.
 - In `responses` mode, `edit --previous-response-id ...` may omit local `--image` inputs when the follow-up should continue from prior response state alone.
 - After this skill is selected, usually invoke the installed launcher first and let it own runtime, auth, and attachment validation. Reach for config/auth or `--help` only when the launcher is missing or its failure still needs interpretation.
+- Prefer `configure` for first-time API setup. It stores `base_url`, `api_key`, and `model` in the codex-image private config file instead of setting global `OPENAI_*` environment variables.
+- Runtime priority for API settings is `CODEX_IMAGE_*` environment variables, then private config, then legacy `OPENAI_*` variables and Codex provider/auth fallbacks.
 - `generate --image` emits a warning and is rerouted to `edit`.
 - Placeholder references are an explicit local thread workflow. They are not the same thing as built-in `imagegen`'s native current-turn runtime image context.
 - `--image '[Image #N]'` resolves against the most recent attachment-bearing user turn, not necessarily the current turn or the most recent text-only user message. If the current turn has no attachments, treat it as a historical reference rather than native current-turn image context.

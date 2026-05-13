@@ -37,6 +37,9 @@ DEFAULT_MODERATION = "auto"
 DEFAULT_BATCH_CONCURRENCY = 4
 DEFAULT_BATCH_MAX_JOBS = 500
 DEFAULT_USER_AGENT = "curl/8.0"
+LOCAL_CONFIG_ENV = "CODEX_IMAGE_CONFIG"
+LOCAL_CONFIG_DIR = "codex-image"
+LOCAL_CONFIG_FILE = "config.json"
 IMAGE_SIZE_STEP = 16
 IMAGE_MAX_EDGE = 3840
 IMAGE_MIN_PIXELS = 655_360
@@ -413,6 +416,69 @@ def load_codex_auth_api_key() -> str | None:
     return None
 
 
+def local_config_path() -> Path:
+    override = os.environ.get(LOCAL_CONFIG_ENV)
+    if override and override.strip():
+        return Path(override).expanduser()
+    return codex_home_dir() / LOCAL_CONFIG_DIR / LOCAL_CONFIG_FILE
+
+
+def load_local_config() -> dict[str, Any]:
+    path = local_config_path()
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"failed to read codex-image config {path}: {exc}")
+    if not isinstance(payload, dict):
+        fail(f"codex-image config must be a JSON object: {path}")
+    return payload
+
+
+def local_config_value(config: dict[str, Any], key: str) -> str | None:
+    value = config.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def write_local_config(*, base_url: str, api_key: str, model: str) -> Path:
+    path = local_config_path()
+    ensure_parent(path)
+    payload = {
+        "base_url": base_url.rstrip("/"),
+        "api_key": api_key,
+        "model": model,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def prompt_config_value(prompt: str, *, default: str | None = None) -> str:
+    suffix = f" [{default}]" if default else ""
+    raw = input(f"{prompt}{suffix}: ").strip()
+    if raw:
+        return raw
+    if default is not None:
+        return default
+    fail(f"{prompt} is required")
+
+
+def cmd_configure(_args: argparse.Namespace) -> int:
+    base_url = prompt_config_value("OPENAI-compatible base URL")
+    api_key = prompt_config_value("API key")
+    model = prompt_config_value("Model", default=DEFAULT_MODEL)
+    path = write_local_config(base_url=base_url, api_key=api_key, model=model)
+
+    print(f"codex-image config saved: {path}")
+    print("WARNING: API key is shown in plain text because configure was requested to echo it.")
+    print(f"OPENAI-compatible base URL: {base_url.rstrip('/')}")
+    print(f"API key: {api_key}")
+    print(f"Model: {model}")
+    return 0
+
+
 def resolve_provider(config: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
     provider_id = os.environ.get("CODEX_IMAGE_MODEL_PROVIDER")
     if not provider_id:
@@ -432,10 +498,14 @@ def resolve_provider(config: dict[str, Any]) -> tuple[str | None, dict[str, Any]
     return str(provider_id), {}
 
 
-def resolve_default_model(config: dict[str, Any]) -> str:
+def resolve_default_model(config: dict[str, Any], local_config: dict[str, Any] | None = None) -> str:
     env_model = os.environ.get("CODEX_IMAGE_MODEL")
     if env_model:
         return env_model
+    if local_config is not None:
+        configured_model = local_config_value(local_config, "model")
+        if configured_model:
+            return configured_model
     config_model = config.get("model")
     if isinstance(config_model, str) and config_model.strip().startswith("gpt-image-"):
         return config_model.strip()
@@ -448,25 +518,31 @@ def ensure_base_url(base_url: str | None, *, config_path: Path, provider_id: str
 
     provider_note = f" for provider {provider_id}" if provider_id else ""
     fail(
-        "OPENAI_BASE_URL is required in API key mode. "
-        f"Set OPENAI_BASE_URL or configure a provider base_url{provider_note} in {config_path}."
+        "A base URL is required in API key mode. "
+        "Run `codex-image configure`, set CODEX_IMAGE_BASE_URL, set OPENAI_BASE_URL, "
+        f"or configure a provider base_url{provider_note} in {config_path}."
     )
 
 
 def resolve_runtime() -> dict[str, Any]:
     config, config_path = load_codex_config()
+    local_config = load_local_config()
     provider_id, provider = resolve_provider(config)
 
     provider_env_key = provider.get("env_key") if isinstance(provider.get("env_key"), str) else None
 
     api_key = (
-        (os.environ.get(provider_env_key) if provider_env_key else None)
+        os.environ.get("CODEX_IMAGE_API_KEY")
+        or local_config_value(local_config, "api_key")
+        or (os.environ.get(provider_env_key) if provider_env_key else None)
         or os.environ.get("OPENAI_API_KEY")
         or load_codex_auth_api_key()
     )
 
     base_url = (
-        os.environ.get("OPENAI_BASE_URL")
+        os.environ.get("CODEX_IMAGE_BASE_URL")
+        or local_config_value(local_config, "base_url")
+        or os.environ.get("OPENAI_BASE_URL")
         or (provider.get("base_url") if isinstance(provider.get("base_url"), str) else None)
     )
 
@@ -482,7 +558,7 @@ def resolve_runtime() -> dict[str, Any]:
     return {
         "api_key": api_key,
         "base_url": ensure_base_url(base_url, config_path=config_path, provider_id=provider_id),
-        "model": resolve_default_model(config),
+        "model": resolve_default_model(config, local_config),
         "transport": os.environ.get("CODEX_IMAGE_TRANSPORT", DEFAULT_TRANSPORT),
         "size": os.environ.get("CODEX_IMAGE_SIZE", DEFAULT_SIZE),
         "quality": os.environ.get("CODEX_IMAGE_QUALITY", DEFAULT_QUALITY),
@@ -1415,6 +1491,15 @@ def post_multipart(
     return execute_request(req, timeout)
 
 
+def fail_request_timeout(url: str, timeout: int) -> NoReturn:
+    fail(
+        f"request timed out after {timeout}s: {url}\n"
+        "The image provider may still be queuing or blocked by the gateway. "
+        "Try a smaller image, lower quality, the alternate API base URL, or set "
+        "CODEX_IMAGE_TIMEOUT to a larger value."
+    )
+
+
 def execute_request(req: request.Request, timeout: int) -> dict[str, Any]:
     try:
         with request.urlopen(req, timeout=timeout) as resp:
@@ -1432,7 +1517,12 @@ def execute_request(req: request.Request, timeout: int) -> dict[str, Any]:
         rid = f", request_id={request_id}" if request_id else ""
         fail(f"request failed: status={exc.code}{rid}\n{body_text}")
     except error.URLError as exc:
+        reason = exc.reason
+        if isinstance(reason, TimeoutError):
+            fail_request_timeout(req.full_url, timeout)
         fail(f"request failed: {exc}")
+    except TimeoutError:
+        fail_request_timeout(req.full_url, timeout)
 
 
 def extract_images_from_images_payload(data: dict[str, Any]) -> list[str]:
@@ -1623,8 +1713,8 @@ def ensure_api_key(runtime: dict[str, Any]) -> str:
         return str(api_key)
     env_hint = runtime["provider_env_key"] or "OPENAI_API_KEY"
     fail(
-        "API key is required. Set OPENAI_API_KEY"
-        f" (or provider env key {env_hint})"
+        "API key is required. Run `codex-image configure`, set CODEX_IMAGE_API_KEY, "
+        f"set OPENAI_API_KEY, or set provider env key {env_hint}."
     )
 
 
@@ -2271,7 +2361,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--out", help="output file path; for n>1, numbered siblings are created")
     common.add_argument("--out-dir", help="output directory; useful for multi-image results")
     common.add_argument("--name", help="output name prefix when --out is omitted")
-    common.add_argument("--model", help="images API model, default from env or Codex config")
+    common.add_argument("--model", help="images API model, default from codex-image config, env, or Codex config")
     common.add_argument("--size", help="image size or ratio, e.g. 1024x1024, 3840x2160, 16:9, 9:16, or auto")
     common.add_argument("--quality", help="image quality, e.g. low, medium, high, or auto")
     common.add_argument("--background", choices=("auto", "opaque", "transparent"), help="image background behavior")
@@ -2361,6 +2451,13 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--concurrency", type=int, default=DEFAULT_BATCH_CONCURRENCY, help="number of concurrent requests")
     batch.add_argument("--fail-fast", action="store_true", help="stop after the first failed job")
     batch.set_defaults(func=cmd_generate_batch)
+
+    configure = sub.add_parser(
+        "configure",
+        help="configure codex-image private API settings",
+        prog="codex-image configure",
+    )
+    configure.set_defaults(func=cmd_configure)
 
     return parser
 

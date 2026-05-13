@@ -1,6 +1,8 @@
 import importlib.util
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,11 +62,20 @@ class SizeNormalizationTests(unittest.TestCase):
         self.assertIn('"%CODEX_IMAGE_PYTHON%" "%SCRIPT_DIR%codex_image.py" %*', launcher_cmd)
         self.assertNotIn("shift", launcher_cmd)
 
+        if os.name == "nt":
+            launcher_command = [str(LAUNCHER_CMD_PATH), "--help"]
+        elif shutil.which("bash"):
+            launcher_command = ["bash", str(LAUNCHER_PATH), "--help"]
+        else:
+            self.skipTest("bash is not available")
+
         result = subprocess.run(
-            ["bash", str(LAUNCHER_PATH), "--help"],
+            launcher_command,
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env={**os.environ, "CODEX_IMAGE_PYTHON": sys.executable},
         )
         self.assertEqual(result.returncode, 0)
@@ -334,7 +345,7 @@ class SizeNormalizationTests(unittest.TestCase):
             jobs_path = Path(tmpdir) / "jobs.jsonl"
             out_path = Path(tmpdir) / "result.png"
             jobs_path.write_text(
-                '{"prompt":"theme concept","out":"' + str(out_path) + '"}\n',
+                json.dumps({"prompt": "theme concept", "out": str(out_path)}) + "\n",
                 encoding="utf-8",
             )
 
@@ -366,9 +377,10 @@ class SizeNormalizationTests(unittest.TestCase):
                 with mock.patch("builtins.print") as mock_print:
                     codex_image.cmd_generate_batch(args)
 
-        printed = mock_print.call_args.args[0]
-        self.assertIn(str(out_path), printed)
-        self.assertIn('"endpoint": "/v1/images/generations"', printed)
+            printed = mock_print.call_args.args[0]
+            preview = json.loads(printed)
+            self.assertEqual(preview["outputs"], [str(out_path)])
+            self.assertEqual(preview["endpoint"], "/v1/images/generations")
 
     def test_attachment_placeholder_resolves_from_current_thread_rollout(self):
         with tempfile.TemporaryDirectory() as tmpdir:

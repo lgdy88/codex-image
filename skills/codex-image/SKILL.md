@@ -16,7 +16,8 @@ Local saved-file raster image workflow backed by `scripts/codex_image.py`, shell
 - Once this skill is selected, usually run the installed launcher first. Preflight config, auth, or `--help` only when the launcher is missing or its failure still leaves a real decision to make.
 - When a launcher call fails with a deterministic local parse or input-shape error and the safe retry is obvious, retry once immediately in the same turn before sending commentary.
 - Do not fall back to SVG, Pillow sketches, screenshots, or one-off scripts unless the user explicitly wants code-native graphics.
-- `OPENAI_BASE_URL` or provider `base_url` must exist in API-key mode.
+- Prefer `codex-image configure` for first-time setup. It writes a private config file under `${CODEX_HOME:-~/.codex}/codex-image/config.json` instead of setting global `OPENAI_*` environment variables.
+- A base URL must exist in API-key mode, from private config, `CODEX_IMAGE_BASE_URL`, `OPENAI_BASE_URL`, or provider `base_url`.
 
 ## When to use
 
@@ -96,7 +97,9 @@ Local saved-file raster image workflow backed by `scripts/codex_image.py`, shell
 ## Prompt guidance
 
 - Structure prompts as backdrop -> subject -> details -> constraints.
+- For complex prompts, dense text, UI mockups, infographics, product renders, posters, multi-panel layouts, or edits with strict invariants, read `references/prompting.md` before expanding the user's request.
 - Quote exact text when text matters.
+- For dense copy, long URLs, price lists, configuration tables, or multilingual posters, do not rely on the image model to render the body text. Generate a no-text visual background or layout asset, then add exact text locally with a real text renderer.
 - Repeat invariants for edits.
 - Add only useful detail; do not invent extra objects, brands, or layout constraints.
 
