@@ -148,6 +148,37 @@ function Write-PrivateConfig {
   Write-Host "Model: $model"
 }
 
+function Clear-LegacyImageEnvironment {
+  $legacyNames = @(
+    "OPENAI_BASE_URL",
+    "OPENAI_API_KEY",
+    "CODEX_IMAGE_MODEL"
+  )
+  $cleared = @()
+
+  foreach ($name in $legacyNames) {
+    $userValue = [Environment]::GetEnvironmentVariable($name, "User")
+    if ($null -ne $userValue) {
+      [Environment]::SetEnvironmentVariable($name, $null, "User")
+      $cleared += "$name(User)"
+    }
+
+    $processValue = [Environment]::GetEnvironmentVariable($name, "Process")
+    if ($null -ne $processValue) {
+      [Environment]::SetEnvironmentVariable($name, $null, "Process")
+      Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+      $cleared += "$name(Process)"
+    }
+  }
+
+  if ($cleared.Count -gt 0) {
+    Write-Step "cleared legacy environment settings: $($cleared -join ', ')"
+    Write-Step "legacy values were not printed"
+  } else {
+    Write-Step "no legacy image environment settings found"
+  }
+}
+
 $codexHomePath = Get-CodexHome
 $destination = Join-Path $codexHomePath "skills/codex-image"
 Write-Step "target: $destination"
@@ -176,11 +207,13 @@ if (Test-ConfigExists -CodexHomePath $codexHomePath) {
   $answer = Read-Host "codex-image is already configured. Update configuration? [y/N]"
   if ($answer -notmatch "^(y|yes)$") {
     Write-Step "configuration unchanged"
+    Clear-LegacyImageEnvironment
     Write-Step "restart Codex Desktop to pick up updated skill files"
     exit 0
   }
 }
 
 Write-PrivateConfig -CodexHomePath $codexHomePath
+Clear-LegacyImageEnvironment
 
 Write-Step "restart Codex Desktop to pick up updated skill files"

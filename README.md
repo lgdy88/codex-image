@@ -45,6 +45,8 @@ iwr -UseBasicParsing https://raw.githubusercontent.com/lgdy88/codex-image/main/s
 
 这条命令可以重复执行：未安装时会安装，已安装时会备份旧版本并同步 GitHub 最新版本。安装或更新后会检查私有配置文件；未配置会进入配置向导，已配置会询问是否更新配置。
 
+安装脚本会在私有配置确认完成后自动清理旧的用户级图片环境变量残留：`OPENAI_BASE_URL`、`OPENAI_API_KEY`、`CODEX_IMAGE_MODEL`。脚本不会打印旧变量值。
+
 安装完成后重启 Codex Desktop，让新 skill 进入可见能力列表。
 
 如果你只想更新 skill 文件、不进入配置向导，可以下载脚本后加 `-SkipConfigure`：
@@ -103,6 +105,17 @@ Model [gpt-image-2]:
 `Model [gpt-image-2]:` 直接回车会使用默认模型 `gpt-image-2`。
 
 `configure` 会在完成后明文打印 API key 供核对。请不要把终端截图、日志或复制内容发到公开位置。
+
+如果你之前手动设置过旧版用户级环境变量，可以用下面命令立即清理；新安装脚本也会在配置完成后自动执行等价清理：
+
+```powershell
+[Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", $null, "User")
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", $null, "User")
+[Environment]::SetEnvironmentVariable("CODEX_IMAGE_MODEL", $null, "User")
+Remove-Item Env:OPENAI_BASE_URL -ErrorAction SilentlyContinue
+Remove-Item Env:OPENAI_API_KEY -ErrorAction SilentlyContinue
+Remove-Item Env:CODEX_IMAGE_MODEL -ErrorAction SilentlyContinue
+```
 
 ### macOS / Linux
 
